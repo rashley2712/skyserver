@@ -1,0 +1,84 @@
+<html>
+	<head>
+		<title>skyWATCH at the ING</title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+		<link rel="stylesheet" type="text/css" href="styles.css"/>
+		<script type="text/x-mathjax-config">
+			MathJax.Hub.Config({"HTML-CSS": { preferredFont: "TeX", availableFonts: ["STIX","TeX"], linebreaks: { automatic:true }, EqnChunk: (MathJax.Hub.Browser.isMobile ? 10 : 50) },
+				tex2jax: { inlineMath: [ ["$", "$"], ["\\\\(","\\\\)"] ], displayMath: [ ["$$","$$"], ["\\[", "\\]"] ], processEscapes: true, ignoreClass: "tex2jax_ignore|dno" },
+				TeX: {
+					extensions: ["begingroup.js"],
+					noUndefined: { attributes: { mathcolor: "red", mathbackground: "#FFEEEE", mathsize: "90%" } }, 
+					Macros: { href: "{}" } 
+				},
+				messageStyle: "none",
+				styles: { ".MathJax_Display, .MathJax_Preview, .MathJax_Preview > *": { "background": "inherit" } },
+				SEEditor: "mathjaxEditing"
+		});
+
+		</script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS_HTML-full"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+		<script src="astrotools.js"></script>
+		<script language="JavaScript">
+			window.onload = (event) => {
+				onLoad();
+			};
+
+			function goto(location) {
+				window.location.href= location;
+			}
+
+			function onLoad() {
+				getJSON("/getmeteo?command=hosts", hostsReceived);
+			}
+
+			function hostsReceived(err, data) {
+				console.log("hosts:", data);
+				var hostList = document.createElement("ul");
+				for (d of data) {
+					var listItem = document.createElement("li");
+					listItem.innerHTML = "<a href='meteo.html?device=" + d.hostname + "'>" + d.hostname + "</a>";
+					hostList.appendChild(listItem);
+				}
+				document.getElementById("hostTable").appendChild(hostList);
+			}
+		</script>
+	</head>
+	<body>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('index.html')";>
+			<span class="glyphicon glyphicon-home"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('meteo.html')";>
+			<span class="glyphicon glyphicon-cloud"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('camera.html')";>
+			<span class="glyphicon glyphicon-camera"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('status.html')";>
+			<span class="glyphicon glyphicon-cog"></span>
+		</button>
+		
+		<h1>skyWATCH</h1>
+		<p>This is the landing page of the skyWATCH server. </p>
+		<h2>Devices available...</h2>
+		<p>Active in the last 24 hours.</p>
+		<div id="hostTable"></div>
+		<hr>
+		<h3>About cloud coverage</h3>
+		<p>The Swinbank formula provides an <em>ad hoc</em> expression for the power radiated by the night sky. A modified version of this formula from Goforth et al. is
+		$$P_{\text{thermal}} = (1+KC^2)8.78\times 10^{-13}\,T^{5.852}\,{RH}^{0.07195}$$
+		where</p>
+		
+		<ul>
+		<li>$K$ is a scale factor based on cloud height, ranging from 0.34 for very low clouds to 0.06 for very high clouds,</li>
+		<li>$C$ is the fraction of the sky covered by clouds,</li>
+		<li>$T$ is the surface temperature, in kelvins,</li>
+		<li>$RH$ is the surface relative humidity, as a percentage (e.g., $RH$ would be 25 in the case of 25% relative humidity), and</li>
+		<li>$P_{\text{thermal}}$ is the night sky radiation, in watts per square meter.</li>
+		</ul>
+	
+	
+	</body>
+	
+</html>

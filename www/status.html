@@ -1,0 +1,241 @@
+<html>
+	<head>
+		<title>skyWATCH - status</title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+		<link rel="stylesheet" type="text/css" href="styles.css"/>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/moment.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.3/Chart.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+		<script src="astrotools.js"></script>
+		<script language="Javascript">
+			// Global variables
+			var hostList =[];
+			var selectedHost = localStorage.getItem("host");
+			var chartList = [];
+			var imageData = [];
+			var imageCursor = 0;
+			var selectedElement;
+			var statusData;
+			var singleDevicePage = false;
+			
+			function getJSON(url, callback) {
+				console.log("calling to fetch:", url);
+				var xhr = new XMLHttpRequest();
+					xhr.open('GET', url, true);
+					xhr.responseType = 'json';
+					xhr.onload = function() {
+						var status = xhr.status;
+						if (status === 200) {
+							callback(null, xhr.response);
+						} else {
+							callback(status, xhr.response);
+						}
+					};
+				xhr.send();
+			};    
+
+			function castDateTime(data) {
+				let count = 0;
+				for (line of data) {
+					let year = parseInt(line.date.substring(0, 4));
+					let month = parseInt(line.date.substring(5, 7));
+					let day = parseInt(line.date.substring(8, 10));
+					let hour = parseInt(line.date.substring(11, 13));
+					let minute = parseInt(line.date.substring(14, 16));
+					let second = parseFloat(line.date.substring(17, 25));
+					//console.log(year, month, day, hour, minute, second);
+					line.dateTime = new Date(Date.UTC(year, month-1, day, hour, minute, second));
+					//console.log(line.dateTime.toString());
+					count++;
+				}
+				return count;
+			}
+
+			window.onload = (event) => {
+				onLoad();
+			};
+
+			function onLoad() {
+				// Check if this is for a specific host
+				const urlSearchParams = new URLSearchParams(window.location.search);
+				const params = Object.fromEntries(urlSearchParams.entries());
+				console.log(params);
+				if (params.device != null) {
+					console.log("selected device is", params.device);
+					selectedHost = params.device;
+					singleDevicePage = true;
+				}
+		
+				clockTicker();
+				console.log("selected host on init:", selectedHost);
+				getJSON("/status", initialiseStatus);
+				tickerID = setInterval(clockTicker, 1 * 1000);
+				refreshID = setInterval(refreshTicker, 10 * 1000);
+			}
+
+			function initialiseStatus(err, data) {
+				console.log("initialise status");
+				const count = castDateTime(data);
+				var newness = [];
+				var uniqueHosts = [];
+				for (var d of data) {
+					if (!uniqueHosts.includes(d.hostname)) uniqueHosts.push(d.hostname);
+				}
+				console.log(uniqueHosts);
+				if (hostList.length==0) hostList = uniqueHosts;
+				console.log(hostList);
+				for (var host of hostList) {
+					var latestTime = 0;
+					for (d of data) {
+						if (d.hostname == host) {
+							updateTime = d.dateTime.getTime();
+							if (updateTime>latestTime) latestTime=updateTime;
+						}
+					}
+					var now = new Date();
+					var difference = (now.getTime() - latestTime) / 1000;
+					newness.push({ 'hostname' : host, 'difference': difference});
+				}
+				console.log(newness);
+				createStatusTable(newness);
+				statusDetail(data);
+				statusData = data;
+			}
+
+			function statusUpdated(err, data) {
+				console.log("status updated");
+				const count = castDateTime(data);
+				statusData = data;
+				console.log("%d rows in status data.", count);
+				var newness = [];
+				var uniqueHosts = [];
+				for (var d of data) {
+					if (!uniqueHosts.includes(d.hostname)) uniqueHosts.push(d.hostname);
+				}
+				console.log(uniqueHosts);
+				if (hostList.length!=uniqueHosts.length) {
+					console.error("Host list has changed!");
+					console.log("old host list:", hostList);
+				}
+				for (var host of hostList) {
+					var latestTime = 0;
+					for (d of data) {
+						if (d.hostname == host) {
+							updateTime = d.dateTime.getTime();
+							if (updateTime>latestTime) latestTime=updateTime;
+						}
+					}
+					var now = new Date();
+					var difference = (now.getTime() - latestTime) / 1000;
+					newness.push({ 'hostname' : host, 'difference': difference});
+				}
+				// console.log(newness);
+				updateStatusTable(newness);
+				statusDetail(statusData);
+			}
+
+			function updateStatusTable(newness) {
+				for (var line of newness) {
+					document.getElementById("newness_" + line.hostname).innerText = humanTime(line.difference);
+				}
+			}
+
+			function createStatusTable(newness) {
+				var tableHTML = "<table>";
+				tableHTML+="<tr>";
+				tableHTML+="<th>Host</th>";
+				tableHTML+="<th>Time since last update</th>";
+				tableHTML+="</tr>";
+				for (var line of newness) {
+					tableHTML+="<tr>";
+					tableHTML+="<td><button id='" + line.hostname + "' onclick='hostSelected(this);' class='host'>" + line.hostname + "</button></td>";
+					tableHTML+="<td><span id='newness_"+line.hostname+"'>" + humanTime(line.difference) + "</span></td>";
+					tableHTML+="</tr>";
+				}
+				tableHTML+="</table>"
+				document.getElementById("newnessTable").innerHTML = tableHTML;
+				if (selectedHost!=null) {
+					selectedElement = document.getElementById(selectedHost);
+					selectedElement.classList.add("selected");
+				}
+			}
+
+			function goto(location) {
+				if (singleDevicePage) location+= "?device=" + selectedHost;
+				window.location.href= location;
+			}
+
+			function hostSelected(element) {
+				if (selectedElement!=null) selectedElement.classList.remove("selected");
+				console.log(element.id);
+				element.classList.add("selected");
+				selectedElement = element;
+				selectedHost = element.id;
+				localStorage.setItem("host", selectedHost);
+				statusDetail(statusData);
+			}
+
+			function clockTicker() {
+		    	now = new Date();
+		 	    document.getElementById('UTCfield').innerText = formatUTCTime(now);
+         	    document.getElementById('Localfield').innerText = formatTime(now);
+            }
+
+			function refreshTicker() {
+				getJSON("/status", statusUpdated);
+			}
+
+			function statusDetail(data) {
+				var subset = [];
+				for (var d of data) {
+					if (d.hostname == selectedHost) subset.push(d);
+				}
+				subset.sort((a,b) => (a.dateTime.getTime() < b.dateTime.getTime()) ? 1 : ((b.dateTime.getTime() < a.dateTime.getTime()) ? -1 : 0))
+				// Get all keys in the data
+				var keyList = [];
+				for (var s of subset) 
+					for (var k of Object.keys(s.system)) {
+						if (!keyList.includes(k)) keyList.push(k)
+					}  
+				tableHTML = "<table class='status'>";
+				tableHTML+= "<tr><th>Date</th><th>Host</th>";
+				for (var k of keyList) tableHTML+="<th>" + k + "</th>";
+				tableHTML+= "</tr>";
+				for (var s of subset) {
+					tableHTML+="<tr>";
+					tableHTML+="<td>" + s.date + " " + s.timezone + "</td>";
+					tableHTML+="<td>" + s.hostname + "</td>";
+					for (var k of keyList) tableHTML+= "<td>" + s.system[k] + "</td>";
+					tableHTML+="</tr>";
+				}
+				tableHTML+= "</table>";
+				document.getElementById("statusDetail").innerHTML = tableHTML;
+			}
+
+		
+		</script>
+	</head>
+	<body>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('index.html')";>
+			<span class="glyphicon glyphicon-home"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('meteo.html')";>
+			<span class="glyphicon glyphicon-cloud"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('camera.html')";>
+			<span class="glyphicon glyphicon-camera"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('status.html')";>
+			<span class="glyphicon glyphicon-cog"></span>
+		</button>
+		
+		<h1>skyWATCH - status</h1>
+		<p>
+			Local: <button type="button" class="clock"><span id="Localfield"></span></button> UT: <button type="button" class="clock"><span id="UTCfield"></span></button>
+			<div id="newnessTable"></div>
+		</p>
+		<p>
+			<div id="statusDetail"></div>
+		</p>
+	</body>
+</html>

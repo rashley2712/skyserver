@@ -1,0 +1,274 @@
+<html>
+	<head>
+		<title>skyWATCH meteo data</title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+  		<link rel="stylesheet" type="text/css" href="styles.css"/>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/moment.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.3/Chart.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+		
+  
+		<script src="meteocharts.js"></script>
+		<script src="astrotools.js"></script>
+		
+		
+		<script language="Javascript">
+			// Global variables
+			var hostList =[];
+			var host = localStorage.getItem("host");
+			var chartList = [];
+			var singleDevicePage = false;
+			var meteoData = [];
+			var latestDate;
+
+			function castDateTime(data) {
+				let count = 0;
+				for (line of data) {
+					let year = parseInt(line.timestamp.substring(0, 4));
+					let month = parseInt(line.timestamp.substring(5, 7));
+					let day = parseInt(line.timestamp.substring(8, 10));
+					let hour = parseInt(line.timestamp.substring(11, 13));
+					let minute = parseInt(line.timestamp.substring(14, 16));
+					let second = parseFloat(line.timestamp.substring(17, 25));
+					//console.log(year, month, day, hour, minute, second);
+					line.dateTime = new Date(Date.UTC(year, month-1, day, hour, minute, second));
+					//console.log(line.dateTime.toString());
+					count++;
+				}
+				return count;
+			}
+
+
+			window.onload = (event) => {
+				console.log('The page has fully loaded');
+				onLoad();
+			};
+
+			function onLoad() {
+				console.log("the page has loaded....");
+				// Check if this is for a specific host
+				const urlSearchParams = new URLSearchParams(window.location.search);
+				const params = Object.fromEntries(urlSearchParams.entries());
+				console.log(params);
+				if (params.device != null) {
+					console.log("selected device is", params.device);
+					host = params.device;
+					singleDevicePage = true;
+					getJSON("/getmeteo?host=" + host, meteoReceived);
+				} else {
+					getJSON("/getmeteo?command=hosts", hostsReceived);
+				}
+				refreshTimerID = setInterval(refreshData, 30 * 1000);
+				clockTimerID = setInterval(clockTicker, 1 * 1000);
+			}
+
+			function refreshData() {
+				getJSON("/getmeteo?host=" + host, meteoReceived);
+			}
+
+			function clockTicker() {
+		    	now = new Date();
+				var freshness = (now.getTime() - latestDate.getTime()) / 1000;
+				document.getElementById("freshness").innerText = humanTime(freshness);
+			}
+
+			function hostsReceived(err, data) {
+				for (var d of data) {
+					hostList.push(d.hostname);
+				}
+				console.log("host list:", hostList);
+				if (host == null) host = hostList[0];
+				getJSON("/getmeteo?host=" + host, meteoReceived);
+				var selectElement = document.createElement("select");
+				selectElement.id = "hostSelect";
+				selectElement.name = "host";
+				selectElement.setAttribute("onchange", "changeHost(this)")
+				var labelElement = document.createElement("label");
+				labelElement.setAttribute("for", "hostSelect");
+				labelElement.appendChild(document.createTextNode("Host:"));
+				for (h of hostList) {
+					var optionElement = document.createElement("option");
+					var optionText = document.createTextNode(h);
+					optionElement.value = h;
+					if(h===host) optionElement.setAttribute("selected", "selected");
+					optionElement.appendChild(optionText);
+					selectElement.appendChild(optionElement);
+				}
+				document.getElementById("controlContainer").appendChild(labelElement);
+				document.getElementById("controlContainer").appendChild(selectElement);
+			}
+
+			function checkDataFor(type, data) {
+				for (var line of data) {
+					for (var key of Object.keys(line)) {
+						//console.log(key);
+						if (key.includes(type)) return true;
+						for (var subkey of Object.keys(line[key])) {
+							//console.log(subkey);
+							if (subkey.includes(type)) return true; 
+						}
+					}
+				}
+				return false;
+			}
+
+			function meteoReceived(err, data) {
+				castDateTime(data);
+				const latest = data[data.length-1];
+				console.log("latest update:", latest.timestamp);
+				latestDate = castSingleDateUTC(latest.timestamp);
+					
+				
+				if (meteoData.length>0) {
+					// Check the age of the most recent data
+					if (latestDate.getTime() > meteoData[meteoData.length-1].dateTime.getTime()) {
+						console.log("newer data ready...");
+						meteoData = data;	
+					} else {
+						console.log("No refresh required.");
+						return;
+					}
+				} else meteoData = data;
+
+
+				if (chartList.length>0) {
+					for (c of chartList) c.destroy();
+				} else chartList = [];
+				// Determine which charts to draw...
+				chartList.push(drawTemperatureChart(meteoData));
+				if (!checkDataFor("humidity", meteoData))
+					console.log("No humidity data found!");
+				else chartList.push(drawHumidityChart(meteoData));
+
+				if (!checkDataFor("pressure", meteoData)) 
+					console.error("No air pressure data found!");
+				else chartList.push(drawPressureChart(meteoData));
+				
+				if (!checkDataFor("IR", meteoData)) 
+					console.error("No IR data found."); 
+				else {
+					for (line of data) 
+						try {
+							line.cloud = swinbankCalc(line.IR.sky, line.IR.ambient, line.dome.humidity);
+						}  catch  {
+							line.cloud = 1.0;
+						}
+					chartList.push(drawCloudChart(data));
+				}
+
+				if (!checkDataFor("battery", data)) console.error("No battery data found.");
+				else {
+					calcBatteryChargeLevel(data);
+					chartHandle = drawBatteryChart(data)
+					chartList.push(chartHandle);
+					calcBatterySummary(data, chartHandle);
+				}
+			}
+
+			function calcBatteryChargeLevel(data) {	
+				for (var line of data) {
+					line.battery.charge = Math.round(line.battery.voltage * 112.7 - 1327);
+					if (line.battery.charge>100) line.battery.charge = 100;
+					if (line.battery.charge<0) line.battery.charge = 0;
+				}
+			}
+
+			function calcBatterySummary(data, chartHandle) {
+				var time = [];
+				var current = [];
+				var power = [];
+				for (var d of data) {
+					time.push(d.dateTime.getTime());
+					current.push(d.battery.current);
+					power.push(d.battery.current * d.battery.voltage / 1000);
+				}
+				const minTime = Math.min(...time);
+				for (var i in time) time[i] = (time[i] - minTime)/1000;
+				var currentsum = 0;
+				var powersum = 0;
+				for (var i=0; i<time.length-1; i++) {
+					let w = time[i+1] - time[i];
+					currentsum+= w / 2 * (current[i+1] + current[i]);
+					powersum+= w / 2 * (power[i+1] + power[i]);
+				}
+				currentsum = decimalPlacesFloat(currentsum/3600000, 2);
+				powersum = decimalPlacesFloat(powersum / 3600, 2);
+				console.log(currentsum, "A.h in the last 24 hours.");
+				console.log(powersum, "W.h in the last 24 hours.");
+				chartHandle.config.options.title.text="Battery: " + data[data.length-1].battery.charge + " %";
+				chartHandle.update();
+				document.getElementById("batterySummary").innerHTML = "Net current (24 hours): " + currentsum + " A.h  Power: " + powersum + " W.h";
+			}
+
+			function swinbankCalc(skyTemp, ambTemp, RH) {
+				let debug = false;
+				if (debug) console.log("input: sky temp %f, ambient %f, humidity %f", skyTemp, ambTemp, RH);
+				let T = skyTemp + 273.15; 		  	// Sky temperature Kelvin
+				let s = 5.67E-8;					// Stefan Boltzmann constant  W.m^-2.K^-4
+				let e = 0.74;		  				// Emissivity of the atmosphere
+				let K = 0.4;							// Cloud scale factor
+				let C = 0.1;							// Cloud fraction
+				//let RH = 20;						// Relative humidity percent
+				let Ts = ambTemp + 273.15;			// Surface temperature in Kelvin
+				let k = 8.78E-13;					// Swinbank constant (https://physics.stackexchange.com/questions/153839/what-is-the-temperature-of-the-clear-night-sky-from-the-surface-of-earth)
+				
+				let Pthermal = s*T**4;
+				if (debug) console.log("Night sky radiating: %f W/m^2", Pthermal);
+
+				let Pthermal2 = (1 + K*C*C) * k * (Ts**5.852) * (RH**0.07195);
+				if (debug) console.log("Expected irradiance: %f W/m^2", Pthermal2);
+				
+				let KC2 = Pthermal / (k * (Ts**5.852) * (RH**0.07195)) - 1;
+				if (debug) console.log("KC2:", KC2);
+				let coverage = 0;
+				if (KC2>0) coverage = (KC2 / K) ** 0.5;
+				if (debug) console.log("Coverage:", coverage);
+				return coverage;
+			}
+
+			function changeHost(element) {
+				console.log("host changed!");
+				console.log(element.value);
+				host = element.value;
+				localStorage.setItem("host", host);
+				getJSON("/getmeteo?host=" + host, meteoReceived);
+				for (c of chartList) {
+					c.destroy();
+				}
+				meteoData = [];
+			}
+
+			function goto(location) {
+				if (singleDevicePage) location+= "?device=" + host;
+				window.location.href= location;
+			}
+
+		</script>
+	</head>
+	<body>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('index.html')";>
+			<span class="glyphicon glyphicon-home"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('meteo.html')";>
+			<span class="glyphicon glyphicon-cloud"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('camera.html')";>
+			<span class="glyphicon glyphicon-camera"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('status.html')";>
+			<span class="glyphicon glyphicon-cog"></span>
+		</button>
+		
+		
+		<h1>Meteo charts</h1>
+		<!--<label for="hostselect">Host:</label> -->
+		<div id="controlContainer"></div>
+		<div>Data freshness: <button id='freshness'></button></div>
+		<canvas id="temperatureChart" width="800px" height="496px"></canvas>
+		<canvas id="humidityChart" width="800px" height="296px"></canvas>
+		<canvas id="pressureChart" width="800px" height="296px"></canvas>
+		<canvas id="cloudChart" width="800px" height="296px"></canvas>
+		<canvas id="batteryChart" width="800px" height="296px"></canvas>
+		<div id="batterySummary"></div>
+	</body>
+</html>

@@ -1,0 +1,46 @@
+@font-face {
+    font-family: Segment14;
+    src: url("Segment14.otf")format("opentype");
+}
+
+@font-face {
+    font-family: led-board;
+    src: url("led-board.ttf")format("truetype");
+}
+
+body {
+	font-size:100%;
+	font-family: Arial;
+
+	background-color:#fffbf2;
+	color:#251b03;
+	margin: 10pt;
+	}
+
+th, td {
+	padding: 4px;
+}
+
+.clock {
+	font-family: led-board;
+	background-color: black;
+	color:greenyellow;
+	width: 150px;
+}
+
+.host {
+	width: 100px;
+}
+
+.selected {
+	background-color: lightcyan;
+}
+
+.status {
+	font-size:100%;
+	width:100%;
+}
+
+.status tr:hover {
+	background-color:burlywood;
+}

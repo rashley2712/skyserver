@@ -1,0 +1,289 @@
+<html>
+	<head>
+		<title>skyWATCH camera</title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+		<link rel="stylesheet" type="text/css" href="styles.css"/>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/moment.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.3/Chart.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+		<script src="astrotools.js"></script>
+		
+		<script language="Javascript">
+			// Global variables
+			var hostList =[];
+			var host = localStorage.getItem("host");
+			var chartList = [];
+			var imageData = [];
+			var imageCursor = 0;
+			var singleDevicePage = false;
+			var videoSelection = 0;
+			var videoSettings = ['04', '08', '12', '24'];
+
+			document.onkeydown = function(evt) {
+    			var evt = evt || window.event;
+				console.log('key:', evt.keyCode);
+				// left 37  p 80
+				// right 39 n 78
+				switch (evt.keyCode) {
+					case 37:
+						console.log("left");
+						imageCursor--;
+						changeCursor();
+						break;
+					case 80:
+						console.log("previous");
+						imageCursor--;
+						changeCursor();
+						break;
+					case 78:
+						console.log("next");
+						imageCursor++;
+						changeCursor();
+						break;
+					case 39:
+						console.log("left");
+						imageCursor++;
+						changeCursor();
+						break;
+			
+				}
+    		};
+
+			
+			function castDateTime(data) {
+				let count = 0;
+				for (line of data) {
+					let year = parseInt(line.date.substring(0, 4));
+					let month = parseInt(line.date.substring(5, 7));
+					let day = parseInt(line.date.substring(8, 10));
+					let hour = parseInt(line.date.substring(11, 13));
+					let minute = parseInt(line.date.substring(14, 16));
+					let second = parseFloat(line.date.substring(17, 25));
+					//console.log(year, month, day, hour, minute, second);
+					line.dateTime = new Date(Date.UTC(year, month-1, day, hour, minute, second));
+					//console.log(line.dateTime.toString());
+					count++;
+				}
+				return count;
+			}
+
+			window.onload = (event) => {
+				console.log('The page has fully loaded');
+				onLoad();
+			};
+
+			function onLoad() {
+				console.log("the page has loaded....");
+				// Check if this is for a specific host
+				const urlSearchParams = new URLSearchParams(window.location.search);
+				const params = Object.fromEntries(urlSearchParams.entries());
+				console.log(params);
+				if (params.device != null) {
+					console.log("selected device is", params.device);
+					host = params.device;
+					singleDevicePage = true;
+					getJSON("/metadata?host=" + host, imageInfoReceived);
+				} else 
+				getJSON("/metadata?command=hosts", imageHostList);
+				changeVideoSelection(0);
+				document.getElementById('videosrc').src = "camera/videos/" + host + "_" + videoSettings[videoSelection] + ".mp4";
+		
+				refreshTimerID = setInterval(refreshData, 15 * 1000);
+				secondTimerID = setInterval(clockTicker, 1000);
+				
+			}
+
+			function clockTicker() {
+				const imageNewness = (new Date().getTime() - imageData[imageCursor].dateTime.getTime() ) / 1000;
+				document.getElementById("newness").innerText = humanTime(imageNewness);
+			}
+
+			function refreshData() {
+				console.log("data refresh: ");
+				getJSON("/metadata?host=" + host, refreshReceived);
+			}
+
+			function refreshReceived(err, data) {
+				const latest = data[data.length-1];
+				console.log("latest update:", latest.date);
+				const latestDate = castSingleDateUTC(latest.date);
+				console.log(imageData[imageData.length-1].dateTime, latestDate);
+				if (latestDate.getTime() > imageData[imageData.length-1].dateTime.getTime()) {
+					console.log("newer data ready...");
+					imageData = data; 
+					castDateTime(imageData);
+					imageCursor = imageData.length - 1;
+					updateImage(imageData[imageCursor]);
+				}
+			}
+
+			function imageHostList(err, data) {
+				console.log("Image hosts: ");
+				for (var d of data) hostList.push(d.hostname);
+				console.log(hostList);
+				// Build the host selector element
+				var selectElement = document.createElement("select");
+				selectElement.id = "hostSelect";
+				selectElement.name = "host";
+				selectElement.setAttribute("onchange", "changeHost(this)")
+				var labelElement = document.createElement("label");
+				labelElement.setAttribute("for", "hostSelect");
+				labelElement.appendChild(document.createTextNode("Host:"));
+				if (host==null) host = hostList[0];
+				for (h of hostList) {
+					var optionElement = document.createElement("option");
+					var optionText = document.createTextNode(h);
+					optionElement.value = h;
+					if(h===host) optionElement.setAttribute("selected", "selected");
+					optionElement.appendChild(optionText);
+					selectElement.appendChild(optionElement);
+				}
+				document.getElementById("deviceSelectContainer").appendChild(labelElement);
+				document.getElementById("deviceSelectContainer").appendChild(selectElement);
+
+				getJSON("/metadata?host=" + host, imageInfoReceived);
+			}
+
+			function imageInfoReceived(err, data) {
+				imageData = data;
+				castDateTime(imageData);
+				imageCursor = imageData.length-1;
+				console.log("reset cursor: ", imageCursor, imageData[imageCursor]);
+				updateImage(imageData[imageCursor]);
+
+				imageNewness = (new Date().getTime() - imageData[imageCursor].dateTime.getTime() ) / 1000;
+				console.log("newness:", imageNewness);	
+			}
+
+			function updateImage(imageInfo) {
+				var imageSrc;
+				var originalSrc;
+				if (imageInfo.resized == true) {
+					imageSrc = "/camera/small/" + imageInfo.file;
+					originalSrc = imageSrc;
+				} else {
+					imageSrc = "/camera/small/" + imageInfo.file.split('.')[0] + "_small.jpg"; 
+					originalSrc = "/camera/original/" + imageInfo.file;
+				}
+				console.log("src: ", imageSrc);
+				console.log("original src: ", originalSrc);
+				document.getElementById("imageElement").src = imageSrc;
+				document.getElementById("imageClick").href = originalSrc;
+
+				// Write the image metadata to the HTML table
+				document.getElementById("datetime").innerText = imageInfo.date;
+				document.getElementById("location_name").innerText = imageInfo.location.name;
+				document.getElementById("location_lat").innerText = imageInfo.location.latitude;
+				document.getElementById("location_long").innerText = imageInfo.location.longitude;
+				document.getElementById("location_elevation").innerText = imageInfo.location.elevation;
+				document.getElementById("sun_elevation").innerText = imageInfo.sun.elevation;
+				document.getElementById("moon_elevation").innerText = imageInfo.moon.elevation;
+				document.getElementById("moon_illumination").innerText = imageInfo.moon.illumination;
+				document.getElementById("datetime").innerText = imageInfo.date;
+				document.getElementById("exposure_mode").innerText = imageInfo.mode;
+				document.getElementById("exposure_time").innerText = imageInfo.exposure;
+				document.getElementById("host").innerText = imageInfo.hostname;
+				if (imageInfo.parameters!=null) document.getElementById("parameters").innerText = imageInfo.parameters;
+				else document.getElementById("parameters").innerText = "";
+			}
+
+			function changeCursor() {
+				if (imageCursor==imageData.length) {
+					imageCursor--;
+					return;
+				}
+				updateImage(imageData[imageCursor]);
+			}
+
+			function changeHost(element) {
+				console.log("host changed to ", element.value);
+				host = element.value;
+				localStorage.setItem("host", host);
+				getJSON("/metadata?host=" + host, imageInfoReceived);
+				document.getElementById("imageElement").focus()
+				document.getElementById('videosrc').src = "camera/videos/" + host + "_" + videoSettings[videoSelection] + ".mp4";
+			}
+
+			function goto(location) {
+				if (singleDevicePage) location+= "?device=" + host;
+				window.location.href = location;
+			}
+
+			function changeVideoSelection(value) {
+				console.log("Changing video to ", value);
+				// Reset the previous button of the video selector
+				var deselectStyle = "color: #003e52;background-color: transparent;";
+				document.getElementById('video_' + videoSettings[videoSelection]).style = deselectStyle;
+				videoSelection = value;
+				// Set the correct button of the video selector
+				var selectStyle = "color: #fff;background-color: rgba(0,62,82,1);";
+				document.getElementById('video_' + videoSettings[videoSelection]).style = selectStyle;
+				// Update the video link
+				document.getElementById('videosrc').src = "camera/videos/" + host + "_" + videoSettings[videoSelection] + ".mp4";
+		
+			}
+
+  
+		
+		</script>
+	</head>
+	<body>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('index.html')";>
+			<span class="glyphicon glyphicon-home"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('meteo.html')";>
+			<span class="glyphicon glyphicon-cloud"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('camera.html')";>
+			<span class="glyphicon glyphicon-camera"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('status.html')";>
+			<span class="glyphicon glyphicon-cog"></span>
+		</button>
+		
+		
+		<h1>skyWATCH camera</h1>
+		<div id="deviceSelectContainer"></div>
+		<div id="controls"><button id="newness">newness</button></div>
+		<p>
+			<div id="latestImage"><a href="" id="imageClick"><img src="" id="imageElement"></a></div>
+		</p>
+		<p>
+			<table border="1">
+				<tr><th align="center" colspan="2">Image info</th></tr>
+				<tr><td style="font-weight: bold;">Date</td><td><span id="datetime">20xx-xx-xx hh:mm:ss</span> UT</td></tr>
+				<tr><td style="font-weight: bold;">Location</td><td><span id="location_name"></span><br/>(<span id="location_lat"></span>, <span id="location_long"></span>) elev: <span id="location_elevation"></span>m</td></tr>
+				<tr><td style="font-weight: bold;">Ephemeris</td><td>Sun elevation: <span id="sun_elevation"></span>&deg; <br/>Moon elevation: <span id="moon_elevation"></span>&deg;<br/>Moon illumination: <span id="moon_illumination"></span>&percnt;</td></tr>
+				<tr><td style="font-weight: bold;">Exposure time</td><td><span id="exposure_time"></span>s</td></tr>
+				<tr><td style="font-weight: bold;">Exposure mode</td><td><span id="exposure_mode"></span></td></tr>
+				<tr><td style="font-weight: bold;">Parameters</td><td><span id="parameters"></span></td></tr>
+				<tr><td style="font-weight: bold;">Host</td><td><span id="host"></span></td></tr>	
+			</table>
+		</p>
+		<p>
+			<table>
+				<tr>
+					<td align="center">
+						<button id="video_04" onclick="changeVideoSelection(0)">4 hours</button>
+						<button id="video_08" onclick="changeVideoSelection(1)">8 hours</button>
+						<button id="video_12" onclick="changeVideoSelection(2)">12 hours</button>
+						<button id="video_24" onclick="changeVideoSelection(3)">24 hours</button>
+					</td>
+				</tr>
+			
+				<tr>
+			
+					<td align="center">
+						<div id="videoholder">
+							<video autoplay controls id="videosrc">
+								<source src="skycam/videos/latest_04.mp4" type="video/mp4">
+							</video>
+						</div>
+					</td>
+			
+			
+				</tr>
+			</table>
+		</p>
+	</body>
+</html>
