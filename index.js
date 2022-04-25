@@ -328,18 +328,16 @@ app.post('/meteo', function(request, response) {
 		return console.error(err.message);
 	  } });
 
-	try {
-		db.run(SQLstatement);
-		success = true;
-		db.close();
-	} catch (e) {
-		console.error("database exception.");
-		console.error(e);
-		success = false;
-	}
+	db.run(SQLstatement, function(err) {
+		if (err) {
+		  console.log("meteo db error", err.message);
+		} else {
+			console.log("Inserted in meteo database ok");
+			success = true;
+		}
+	  });
+	db.close();
 	
-	console.log("Success is", success);
-
   	response.writeHead(200, { 'Content-Type': 'application/json',  'Access-Control-Allow-Origin': '*' });
     if(success) response.write(JSON.stringify({ "status": "success"})) 
 	else response.write(JSON.stringify({ "status": "failed"}));
