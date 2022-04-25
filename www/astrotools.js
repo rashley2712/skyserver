@@ -17,6 +17,7 @@ function formatTime(date) {
 
 function humanTime(seconds) {
 	const check = seconds;
+	console.log("human:", seconds);
 	if (seconds < 60) return Math.round(seconds).toString() + " seconds";
 	var minutes = seconds/60;
 	if (minutes<60) {
@@ -25,8 +26,12 @@ function humanTime(seconds) {
 	}
 	var hours = minutes/60;
 	minutes = (hours - Math.floor(hours)) * 60;
-	return Math.floor(hours) + ":" + zeroPad(Math.floor(minutes))  + " hours";
-	// return seconds.toString();
+	if (hours<24) return Math.floor(hours) + ":" + zeroPad(Math.floor(minutes))  + " hours";
+
+	var days = hours/24;
+	hours = (days - Math.floor(days)) * 24;
+	return Math.floor(days) + "d " + Math.floor(hours) + "h";
+	return seconds.toString();
 }
 
 function decimalPlacesFloat(value, places) {

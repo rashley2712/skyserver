@@ -149,7 +149,7 @@
 				for (var line of newness) {
 					tableHTML+="<tr>";
 					tableHTML+="<td><button id='" + line.hostname + "' onclick='hostSelected(this);' class='host'>" + line.hostname + "</button></td>";
-					tableHTML+="<td><span id='newness_"+line.hostname+"'>" + humanTime(line.difference) + "</span></td>";
+					tableHTML+="<td><span id='newness_" + line.hostname + "'>" + humanTime(line.difference) + "</span></td>";
 					tableHTML+="</tr>";
 				}
 				tableHTML+="</table>"
@@ -205,7 +205,12 @@
 					tableHTML+="<tr>";
 					tableHTML+="<td>" + s.date + " " + s.timezone + "</td>";
 					tableHTML+="<td>" + s.hostname + "</td>";
-					for (var k of keyList) tableHTML+= "<td>" + s.system[k] + "</td>";
+					for (var k of keyList) {
+						tableHTML+= "<td>";
+						if(k=='uptime') tableHTML+= humanTime(s.system[k]);
+						else tableHTML+=s.system[k];
+						tableHTML+= "</td>";
+					}
 					tableHTML+="</tr>";
 				}
 				tableHTML+= "</table>";
