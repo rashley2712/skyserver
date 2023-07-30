@@ -21,6 +21,34 @@ th, td {
 	padding: 4px;
 }
 
+.active {
+	font-weight: bold;
+}
+
+.navigator {
+	border: 1px;
+}
+
+.navigator td {
+	text-align: center;
+}
+
+.navigator td:hover {
+	background-color: #f8ecd1;;
+}
+
+.calendar {
+	text-align: center;
+}
+
+.master {
+	vertical-align: top;
+}
+
+.month-header {
+	font-weight: bold;
+}
+
 .clock {
 	font-family: led-board;
 	background-color: black;

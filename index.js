@@ -381,7 +381,7 @@ app.get("/getmeteo", function(request, response) {
 				const endDateStr = formatUTCDateTime(endDate);
 				const startDate = new Date(endDate.getTime() - 86400*1000);
 				const startDateStr = formatUTCDateTime(startDate);
-				console.log("Getting host active in the last 24 hours.");
+				console.log("Getting hosts active in the last 24 hours.");
 		
 				let SQLstatement = "SELECT DISTINCT(hostname) from meteo WHERE date<'" + endDateStr +  "' AND date>'" + startDateStr  + "';";
 				executeSQL(db, SQLstatement, function (err, data) {

@@ -17,7 +17,6 @@ function formatTime(date) {
 
 function humanTime(seconds) {
 	const check = seconds;
-	console.log("human:", seconds);
 	if (seconds < 60) return Math.round(seconds).toString() + " seconds";
 	var minutes = seconds/60;
 	if (minutes<60) {
@@ -65,3 +64,107 @@ function getJSON(url, callback) {
 		};
 	xhr.send();
 };    
+
+
+// Calendar drawing
+function drawCalendar(startDate, endDate, parentElement) {
+	var startMonth = parseInt(startDate.substring(5, 7));
+	var endMonth = parseInt(endDate.substring(5, 7));
+	var startYear = parseInt(startDate.substring(0, 5));
+	var endYear = parseInt(endDate.substring(0, 5));
+	var cols = 4;
+	let fullTable = document.createElement("table");
+	let counter = 0;
+	var tableRow;
+	for (var year=startYear; year<=endYear; year++) {
+		if (year==endYear) stopMonth=endMonth; else stopMonth=12;
+		for (var month=startMonth; month<=stopMonth; month++) {
+			if (counter % cols == 0) tableRow = document.createElement("tr");
+			var monthElement = document.createElement("div");
+			let tableData = document.createElement("td");
+			tableData.setAttribute('class', 'master');
+			drawMonth(month, year, tableData);
+			monthElement.id = "month_" + zeroPad(month.toString()) + year.toString();
+			monthElement.name = "month_" + zeroPad(month.toString()) + year.toString();
+			drawMonth(month, year, monthElement);
+			// parentElement.appendChild(monthElement);
+			tableRow.appendChild(tableData);
+			if (counter % cols == cols-1) {
+				fullTable.appendChild(tableRow);
+			}
+			counter++;		
+		}
+		if (counter % cols != cols-1) {
+			fullTable.appendChild(tableRow);
+		}
+		
+		startMonth=1;
+	}
+	parentElement.appendChild(fullTable);
+}
+
+function drawMonth(month, year, element) {
+	var debug = false;
+	var dateCursor = new Date();
+	if (debug) console.log("date:", dateCursor);
+	//calendarYear = dateCursor.getFullYear();
+	calendarYear = year;
+	//calendarMonth = dateCursor.getMonth();
+	calendarMonth = month-1;
+	//calendarDay = 15;
+	//console.log("Current day:", calendarDay);
+	if (debug) console.log("Current month:", calendarMonth);
+	if (debug) console.log("Current year:", calendarYear);
+	
+	let months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+	let days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+	let monthString = months[calendarMonth];
+	let firstDay = new Date(calendarYear, calendarMonth, 1);
+	let lastDay = new Date(calendarYear, calendarMonth+1, 0).getDate();
+	dayOfWeek = firstDay.getDay();
+	if (debug) console.log(firstDay);
+	if (debug) console.log(lastDay);
+	if (debug) console.log("First day is a", days[dayOfWeek]);
+	tableHTML = "<table border=\"1\" class=\"calendar\">\n";
+	tableHTML+="\t<tr><td colspan=\"7\" class=\"month-header\">" + monthString + " " + calendarYear + "</td></tr>\n";
+	tableHTML+="\t<tr>\n";
+	tableHTML+="\t\t<td>S</td><td>M</td><td>T</td><td>W</td><td>T</td><td>F</td><td>S</td>\n";	
+	tableHTML+="\t</tr>\n";
+	tableHTML+="\t<tr>\n";
+	for (var i=0; i<dayOfWeek;i++) { 
+		let day = new Date(firstDay.getTime() - 86400*1000 * (dayOfWeek-i));
+		let dayNumber = day.getDate();
+		tableHTML+="\t\t<td>" + dayNumber + "</td>\n"; 
+		}
+	var dayCounter = 0;
+	for (var i=dayOfWeek; i<7; i++) {
+		let day = new Date(firstDay.getTime() + dayCounter * 86400*1000);
+		let dayNumber = day.getDate();
+		let idString = "day_" + year + "-" + zeroPad(month) + "-" + zeroPad(dayNumber);
+		tableHTML+="\t\t<td id=\"" + idString + "\" onmouseover=\"highlight(this)\" onmouseout=\"unhighlight(this)\"><span class=\"active\">" + dayNumber + "</span>";
+		tableHTML+="</td>\n";
+		dayCounter++;
+	}
+	tableHTML+="\t</tr>\n";
+	while (dayCounter<lastDay) {
+		tableHTML+="\t<tr>\n";
+		for (var i=0; i<7; i++) {
+			let day = new Date(firstDay.getTime() + dayCounter * 86400*1000);
+			let dayNumber = day.getDate();
+			let idString = "day_" + year + "-" + zeroPad(month) + "-" + zeroPad(dayNumber);
+			if (dayCounter<lastDay) {
+				tableHTML+="\t\t<td id=\"" + idString + "\" onmouseover=\"highlight(this)\" onmouseout=\"unhighlight(this)\"><span class=\"active\">" + dayNumber + "</span>";
+				tableHTML+="</td>\n";
+			}
+			else  
+				tableHTML+="\t\t<td>" + dayNumber + "</td>\n";
+			dayCounter++;
+		}
+		tableHTML+="\t</tr>\n";
+	}
+	
+	tableHTML+= "</table>";
+	if (debug) console.log(tableHTML);
+	
+	element.innerHTML = tableHTML;
+}

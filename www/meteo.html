@@ -1,5 +1,14 @@
 <html>
 	<head>
+		<!-- Global site tag (gtag.js) - Google Analytics -->
+		<script async src="https://www.googletagmanager.com/gtag/js?id=G-9DT1YLGX9Y"></script>
+		<script>
+			window.dataLayer = window.dataLayer || [];
+			function gtag(){dataLayer.push(arguments);}
+			gtag('js', new Date());
+
+			gtag('config', 'G-9DT1YLGX9Y');
+		</script>
 		<title>skyWATCH meteo data</title>
 		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
   		<link rel="stylesheet" type="text/css" href="styles.css"/>
@@ -20,6 +29,8 @@
 			var singleDevicePage = false;
 			var meteoData = [];
 			var latestDate;
+			var firstDate;
+			var live = true;
 
 			function castDateTime(data) {
 				let count = 0;
@@ -113,15 +124,26 @@
 			}
 
 			function meteoReceived(err, data) {
+				const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+				if (data.length==0) {
+					console.error("No data returned for host:", host);
+					var maintenanceHTML = "<h2>No data found for host: " + host + "</h2>";
+					maintenanceHTML+= "<h3>The device is offline at the moment for maintenance. You can see third party meteo data at: ";
+					maintenanceHTML+="<a href='https://apalmet.es/estaciones/lapalma'>APALMET</a>.</h3>";
+					document.getElementById("controlContainer").innerHTML = maintenanceHTML;
+					return;
+				}
 				castDateTime(data);
 				const latest = data[data.length-1];
+				const first = data[0];
 				console.log("latest update:", latest.timestamp);
 				latestDate = castSingleDateUTC(latest.timestamp);
-					
+				firstDate = castSingleDateUTC(first.timestamp);	
+				document.getElementById("dateRange").innerText = days[firstDate.getDay()] + " " + formatUTCTime(firstDate) + " ---- " + days[latestDate.getDay()] + " " + formatUTCTime(latestDate);
 				
 				if (meteoData.length>0) {
 					// Check the age of the most recent data
-					if (latestDate.getTime() > meteoData[meteoData.length-1].dateTime.getTime()) {
+					if (latestDate.getTime() != meteoData[meteoData.length-1].dateTime.getTime()) {
 						console.log("newer data ready...");
 						meteoData = data;	
 					} else {
@@ -151,7 +173,7 @@
 						try {
 							line.cloud = swinbankCalc(line.IR.sky, line.IR.ambient, line.dome.humidity);
 						}  catch  {
-							line.cloud = 1.0;
+							line.cloud = 1.0; 
 						}
 					chartList.push(drawCloudChart(data));
 				}
@@ -243,6 +265,58 @@
 				window.location.href= location;
 			}
 
+			function goBack() {
+				console.log("going back 24 hours");
+				if (live) {
+					live = false;
+					// kill the data refresh timer
+					clearInterval(refreshTimerID);
+				
+					// update the icon
+					document.getElementById("liveIndicator").style.color = "black"; 
+					
+				}
+				var endDate = new Date(latestDate.getTime() - 86400*1000);
+				var startDate = new Date(endDate.getTime() - 86400*1000);
+				console.log("going back to:", startDate, endDate);
+				getStaticMeteo(startDate, endDate)
+			}
+
+			function goForward() {
+				console.log("going forward 24 hours");
+				
+				var endDate = new Date(latestDate.getTime() + 86400*1000);
+				const now = new Date();
+				if (now.getTime()<endDate.getTime()) {
+					console.error("Requesting data in the future");
+					endDate = now;
+
+				}
+				var startDate = new Date(endDate.getTime() - 86400*1000);
+				console.log("going forward to:", startDate, endDate);
+				
+				getStaticMeteo(startDate, endDate)
+			}
+
+			function goLive() {
+				if (live) return;
+				live = true;
+				document.getElementById("liveIndicator").style.color = "green"; 
+				refreshTimerID = setInterval(refreshData, 30 * 1000);
+				refreshData();
+			}
+
+			function getStaticMeteo(startDate, endDate) {
+				document.getElementById("dateRange").innerText = "...fetching data...";
+				var dataURL = "/getmeteo?host=" + host;
+				dataURL+= "&start=" + formatUTCTime(startDate);
+				dataURL+= "&end=" + formatUTCTime(endDate);
+				dataURL = encodeURI(dataURL);
+				console.log(dataURL);
+				getJSON(dataURL, meteoReceived);
+				
+			}
+
 		</script>
 	</head>
 	<body>
@@ -251,6 +325,9 @@
 		</button>
 		<button type="button" class="btn btn-default btn-sm" onclick="goto('meteo.html')";>
 			<span class="glyphicon glyphicon-cloud"></span>
+		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('meteostats.html')";>
+			<span class="glyphicon glyphicon-stats"></span>	
 		</button>
 		<button type="button" class="btn btn-default btn-sm" onclick="goto('camera.html')";>
 			<span class="glyphicon glyphicon-camera"></span>
@@ -262,8 +339,16 @@
 		
 		<h1>Meteo charts</h1>
 		<!--<label for="hostselect">Host:</label> -->
-		<div id="controlContainer"></div>
-		<div>Data freshness: <button id='freshness'></button></div>
+		<div><span id="controlContainer"></span>&nbsp;  Data freshness: <span id='freshness'></span></div>
+		<div></div>
+		<hr/>
+		<table width="800px" class="navigator">
+			<tr>
+				<td onclick="goBack()"><span class="glyphicon glyphicon-chevron-left"></span></td>
+				<td><span onclick="goLive()" id="liveIndicator" class="glyphicon glyphicon-play-circle" style="color: green;"></span>&nbsp;<span id="dateRange">...fetching data...</span></td>
+				<td onclick="goForward()"><span class="glyphicon glyphicon-chevron-right"></span></td>
+			</tr>
+		</table>
 		<canvas id="temperatureChart" width="800px" height="496px"></canvas>
 		<canvas id="humidityChart" width="800px" height="296px"></canvas>
 		<canvas id="pressureChart" width="800px" height="296px"></canvas>

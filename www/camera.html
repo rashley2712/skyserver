@@ -1,5 +1,14 @@
 <html>
 	<head>
+		<!-- Global site tag (gtag.js) - Google Analytics -->
+			<script async src="https://www.googletagmanager.com/gtag/js?id=G-9DT1YLGX9Y"></script>
+			<script>
+				window.dataLayer = window.dataLayer || [];
+				function gtag(){dataLayer.push(arguments);}
+				gtag('js', new Date());
+
+				gtag('config', 'G-9DT1YLGX9Y');
+			</script>
 		<title>skyWATCH camera</title>
 		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
 		<link rel="stylesheet" type="text/css" href="styles.css"/>
@@ -146,6 +155,15 @@
 
 			function imageInfoReceived(err, data) {
 				imageData = data;
+				console.log("data:", data);
+				if (data.length==0) {
+					console.error("No data returned for host:", host);
+					var maintenanceHTML = "<h2>No data found for host: " + host + "</h2>";
+					maintenanceHTML+= "<h3>The device is offline at the moment for maintenance. You can see third party meteo data at: ";
+					maintenanceHTML+="<a href='https://apalmet.es/estaciones/lapalma'>APALMET</a>.</h3>";
+					document.getElementById("controls").innerHTML = maintenanceHTML;
+					return;
+				}
 				castDateTime(imageData);
 				imageCursor = imageData.length-1;
 				console.log("reset cursor: ", imageCursor, imageData[imageCursor]);
@@ -158,11 +176,12 @@
 			function updateImage(imageInfo) {
 				var imageSrc;
 				var originalSrc;
+				if (imageInfo.encoding == null) imageInfo.encoding = "jpg";
 				if (imageInfo.resized == true) {
 					imageSrc = "/camera/small/" + imageInfo.file;
 					originalSrc = imageSrc;
 				} else {
-					imageSrc = "/camera/small/" + imageInfo.file.split('.')[0] + "_small.jpg"; 
+					imageSrc = "/camera/small/" + imageInfo.file.split('.')[0] + "_small." + imageInfo.encoding; 
 					originalSrc = "/camera/original/" + imageInfo.file;
 				}
 				console.log("src: ", imageSrc);
@@ -181,6 +200,7 @@
 				document.getElementById("moon_illumination").innerText = imageInfo.moon.illumination;
 				document.getElementById("datetime").innerText = imageInfo.date;
 				document.getElementById("exposure_mode").innerText = imageInfo.mode;
+				document.getElementById("encoding").innerText = imageInfo.encoding;
 				document.getElementById("exposure_time").innerText = imageInfo.exposure;
 				document.getElementById("host").innerText = imageInfo.hostname;
 				if (imageInfo.parameters!=null) document.getElementById("parameters").innerText = imageInfo.parameters;
@@ -234,6 +254,9 @@
 		<button type="button" class="btn btn-default btn-sm" onclick="goto('meteo.html')";>
 			<span class="glyphicon glyphicon-cloud"></span>
 		</button>
+		<button type="button" class="btn btn-default btn-sm" onclick="goto('meteostats.html')";>
+			<span class="glyphicon glyphicon-stats"></span>	
+		</button>
 		<button type="button" class="btn btn-default btn-sm" onclick="goto('camera.html')";>
 			<span class="glyphicon glyphicon-camera"></span>
 		</button>
@@ -256,6 +279,7 @@
 				<tr><td style="font-weight: bold;">Ephemeris</td><td>Sun elevation: <span id="sun_elevation"></span>&deg; <br/>Moon elevation: <span id="moon_elevation"></span>&deg;<br/>Moon illumination: <span id="moon_illumination"></span>&percnt;</td></tr>
 				<tr><td style="font-weight: bold;">Exposure time</td><td><span id="exposure_time"></span>s</td></tr>
 				<tr><td style="font-weight: bold;">Exposure mode</td><td><span id="exposure_mode"></span></td></tr>
+				<tr><td style="font-weight: bold;">Encoding</td><td><span id="encoding"></span></td></tr>
 				<tr><td style="font-weight: bold;">Parameters</td><td><span id="parameters"></span></td></tr>
 				<tr><td style="font-weight: bold;">Host</td><td><span id="host"></span></td></tr>	
 			</table>
