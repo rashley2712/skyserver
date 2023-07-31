@@ -91,12 +91,22 @@ app.post('/upload', upload.single('camera'), function (req, res, next) {
   console.log(req.file);
   var destinationFilename = path.join(req.file.destination, req.file.filename);
   var intendedFilename = path.join(req.file.destination, req.file.originalname);
+  const hostname = req.file.originalname.substring( req.file.originalname.lastIndexOf("_") + 1, req.file.originalname.lastIndexOf(".") );
+  const encoding = req.file.originalname.substring( req.file.originalname.lastIndexOf(".") + 1) 
+  console.log("hostname: ", hostname, " encoding:", encoding);
   console.log("Will rename %s to %s", destinationFilename, intendedFilename);
   fs.rename(destinationFilename, intendedFilename, function(err) {
     	if ( err ) console.log('ERROR: ' + err);
 		console.log("rename successful");
 		camerautils.scaleFile(intendedFilename, cameraPath);
 		});
+  
+	var latestFilename = path.join("/var/www/skyserver/camera/", hostname + "_latest." + encoding);
+	console.log("Will copy %s to %s", intendedFilename, latestFilename);
+	fs.copyFile(intendedFilename, latestFilename, (err) => {
+		if (err) throw err;
+		console.log('copied ok');
+	  });
   
   res.status(204).end();
 });
@@ -342,6 +352,15 @@ app.post('/meteo', function(request, response) {
     if(success) response.write(JSON.stringify({ "status": "success"})) 
 	else response.write(JSON.stringify({ "status": "failed"}));
     response.end();
+
+	// Now update a status file as JSON for ING website to read.
+	var meteoData = data;
+	fileJSON = JSON.stringify(meteoData, null, 2);
+	const JSONFilename = hostname + "_latest.json";
+    fs.writeFile(path.join(rootPath, JSONFilename), fileJSON, function (err) {
+      if (err) return console.log(err);
+      console.log('Updated', JSONFilename);
+    });
 
 });
 
