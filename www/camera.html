@@ -99,7 +99,55 @@
 		
 				refreshTimerID = setInterval(refreshData, 15 * 1000);
 				secondTimerID = setInterval(clockTicker, 1000);
-				
+
+				document.getElementById("imageElement").style.cursor = "crosshair";
+					
+				document.onmousemove = function(e){
+    				let rect = document.getElementById("imageElement").getBoundingClientRect();
+					let mouseX = e.pageX - rect.left;
+    				let mouseY = e.pageY - rect.top;
+					if (mouseX<0 || mouseY<0) {
+						let mouseText = `(--, --)`;
+						document.getElementById("mouseStatus").innerText = mouseText;
+						return
+					}
+					let mouseText = `(${Math.round(mouseX)}, ${Math.round(mouseY)})`;
+					function convertToXY(alt, az) {
+						let R = 1792/4;
+						let xc = 2042/4;
+						let yc = 1768/4;
+						let az_rad = az/180*Math.PI;
+						let alt_rad = alt/180*Math.PI;
+						x = xc - R * numpy.cos(alt_rad) * numpy.sin(az_rad) 
+						y = yc - R * numpy.cos(alt_rad) * numpy.cos(az_rad)
+						return {"x": x, "y": y}
+					}
+					function convertToAltAz(xp, yp) {
+						let R = 1792/4;
+						let xc = 2042/4;
+						let yc = 1768/4;
+						
+						x = xp - xc;
+						y = yc - yp;
+						r = Math.sqrt(x*x + y*y)
+						alt_rad = Math.acos(r/R);
+						if (isNaN(alt_rad)) alt_rad = 0;
+						az_rad = Math.atan2(y, x)
+						console.log(x, y, az_rad, r, R, az_rad);
+						az = az_rad*180/Math.PI - 90;
+						alt = alt_rad*180/Math.PI;
+
+						if (az<0) az+=360;
+						
+						return {"Alt": alt, "Az": az}
+					}
+					let altaz = convertToAltAz(mouseX, mouseY);
+					mouseText+= `  <b>[Alt: ${Math.round(altaz.Alt)}, Az: ${Math.round(altaz.Az)}]</b>`
+					document.getElementById("mouseStatus").innerHTML = mouseText;
+					
+					//console.log(e);
+					//console.log(rect.top, rect.right, rect.bottom, rect.left);
+				}
 			}
 
 			function clockTicker() {
@@ -269,6 +317,7 @@
 		<div id="deviceSelectContainer"></div>
 		<div id="controls"><button id="newness">newness</button></div>
 		<p>
+			<div id="mouseStatus">(--,--)</div>
 			<div id="latestImage"><a href="" id="imageClick"><img src="" id="imageElement"></a></div>
 		</p>
 		<p>
