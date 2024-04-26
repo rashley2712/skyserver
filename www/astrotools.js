@@ -50,7 +50,7 @@ function castSingleDateUTC(text) {
 
 
 function getJSON(url, callback) {
-	console.log("calling to fetch:", url);
+	console.log("making a GET request to:", url);
 	var xhr = new XMLHttpRequest();
 		xhr.open('GET', url, true);
 		xhr.responseType = 'json';
@@ -63,6 +63,24 @@ function getJSON(url, callback) {
 			}
 		};
 	xhr.send();
+};    
+
+function postJSON(url, data, callback) {
+	console.log("moking a POST request to:", url);
+	var xhr = new XMLHttpRequest();
+	xhr.open('POST', url, true);
+	xhr.responseType = 'json';
+	xhr.setRequestHeader("Content-type","application/json");
+	xhr.onload = function() {
+		var status = xhr.status;
+		if (status === 200) {
+			callback(null, xhr.response);
+		} else {
+			callback(status, xhr.response);
+		}
+	};
+	xhr.send(data);
+
 };    
 
 

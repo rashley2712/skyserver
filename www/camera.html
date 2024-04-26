@@ -27,6 +27,8 @@
 			var singleDevicePage = false;
 			var videoSelection = 0;
 			var videoSettings = ['04', '08', '12', '24'];
+			var visibleWHT = false;
+			var WHT = null;
 
 			document.onkeydown = function(evt) {
     			var evt = evt || window.event;
@@ -58,7 +60,74 @@
 				}
     		};
 
+			function convertToXY(alt, az) {
+				let R = 1792/4;
+				let xc = 2042/4;
+				let yc = 1768/4;
+				let az_rad = az/180*Math.PI;
+				let alt_rad = alt/180*Math.PI;
+				x = xc - R * Math.cos(alt_rad) * Math.sin(az_rad) 
+				y = yc - R * Math.cos(alt_rad) * Math.cos(az_rad)
+				return {"x": x, "y": y}
+			}
+
+
+			function convertToAltAz(xp, yp) {
+				let R = 1792/4;
+				let xc = 2042/4;
+				let yc = 1768/4;
+				
+				x = xp - xc;
+				y = yc - yp;
+				r = Math.sqrt(x*x + y*y)
+				alt_rad = Math.acos(r/R);
+				if (isNaN(alt_rad)) alt_rad = 0;
+				az_rad = Math.atan2(y, x)
+				//console.log(x, y, az_rad, r, R, az_rad);
+				az = az_rad*180/Math.PI - 90;
+				alt = alt_rad*180/Math.PI;
+
+				if (az<0) az+=360;
+				
+				return {"Alt": alt, "Az": az}
+			}
+
+			function getWHTPointing() {
+				console.log("getting the location of the WHT.");
+				let postURL = "http://api.ing.iac.es/v1/pnb/get";
+				postData = JSON.stringify(["TCS.az", "TCS.alt"]);
+				postJSON(postURL, postData, function(err, data) {
+					if (err!=null) {
+						visibleWHT = false;
+						console.error("unable to display WHT pointing.")
+					}
+					else {
+						console.log("WHT pointing:", data);
+						WHT = { "alt" : parseFloat(data['TCS.alt'])*180/Math.PI, "az" : parseFloat(data['TCS.az'])*180/Math.PI};
+						console.log(WHT);
+						visibleWHT = true;
+						plotWHT();
+					}
+				});
+			}
 			
+			function plotWHT() {
+				if (!visibleWHT) {
+					console.error("not showing WHT");
+					return;
+				}
+				var c = document.getElementById("imageCanvas");
+    			var ctx = c.getContext("2d");
+				ctx.beginPath();
+				let center = convertToXY(WHT.alt, WHT.az);
+				console.log("center at: ", center);
+				ctx.arc(center.x, center.y, 10, 0, 2 * Math.PI, false);
+				ctx.lineWidth = 3;
+				ctx.strokeStyle = "#c82124"; //red
+				ctx.stroke();
+				//ctx.fill();
+			}
+
 			function castDateTime(data) {
 				let count = 0;
 				for (line of data) {
@@ -83,6 +152,7 @@
 
 			function onLoad() {
 				console.log("the page has loaded....");
+				getWHTPointing();
 				// Check if this is for a specific host
 				const urlSearchParams = new URLSearchParams(window.location.search);
 				const params = Object.fromEntries(urlSearchParams.entries());
@@ -100,47 +170,20 @@
 				refreshTimerID = setInterval(refreshData, 15 * 1000);
 				secondTimerID = setInterval(clockTicker, 1000);
 
-				document.getElementById("imageElement").style.cursor = "crosshair";
+				document.getElementById("imageCanvas").style.cursor = "crosshair";
 					
 				document.onmousemove = function(e){
-    				let rect = document.getElementById("imageElement").getBoundingClientRect();
+    				let rect = document.getElementById("imageCanvas").getBoundingClientRect();
 					let mouseX = e.pageX - rect.left;
     				let mouseY = e.pageY - rect.top;
+					// console.log(mouseX, mouseY);
 					if (mouseX<0 || mouseY<0) {
 						let mouseText = `(--, --)`;
 						document.getElementById("mouseStatus").innerText = mouseText;
 						return
 					}
 					let mouseText = `(${Math.round(mouseX)}, ${Math.round(mouseY)})`;
-					function convertToXY(alt, az) {
-						let R = 1792/4;
-						let xc = 2042/4;
-						let yc = 1768/4;
-						let az_rad = az/180*Math.PI;
-						let alt_rad = alt/180*Math.PI;
-						x = xc - R * numpy.cos(alt_rad) * numpy.sin(az_rad) 
-						y = yc - R * numpy.cos(alt_rad) * numpy.cos(az_rad)
-						return {"x": x, "y": y}
-					}
-					function convertToAltAz(xp, yp) {
-						let R = 1792/4;
-						let xc = 2042/4;
-						let yc = 1768/4;
-						
-						x = xp - xc;
-						y = yc - yp;
-						r = Math.sqrt(x*x + y*y)
-						alt_rad = Math.acos(r/R);
-						if (isNaN(alt_rad)) alt_rad = 0;
-						az_rad = Math.atan2(y, x)
-						console.log(x, y, az_rad, r, R, az_rad);
-						az = az_rad*180/Math.PI - 90;
-						alt = alt_rad*180/Math.PI;
-
-						if (az<0) az+=360;
-						
-						return {"Alt": alt, "Az": az}
-					}
+					
 					let altaz = convertToAltAz(mouseX, mouseY);
 					mouseText+= `  <b>[Alt: ${Math.round(altaz.Alt)}, Az: ${Math.round(altaz.Az)}]</b>`
 					document.getElementById("mouseStatus").innerHTML = mouseText;
@@ -234,8 +277,18 @@
 				}
 				console.log("src: ", imageSrc);
 				console.log("original src: ", originalSrc);
-				document.getElementById("imageElement").src = imageSrc;
-				document.getElementById("imageClick").href = originalSrc;
+				
+				var image = new Image();
+				image.onload = function () {
+					console.log("image has loaded");
+					let c = document.getElementById("imageCanvas");
+					let ctx = c.getContext("2d");
+					ctx.drawImage(image, 0, 0);
+					plotWHT();
+        		};
+				image.src = imageSrc; 
+				//document.getElementById("imageElement").src = imageSrc;
+				//document.getElementById("imageClick").href = originalSrc;
 
 				// Write the image metadata to the HTML table
 				document.getElementById("datetime").innerText = imageInfo.date;
@@ -318,7 +371,11 @@
 		<div id="controls"><button id="newness">newness</button></div>
 		<p>
 			<div id="mouseStatus">(--,--)</div>
-			<div id="latestImage"><a href="" id="imageClick"><img src="" id="imageElement"></a></div>
+			<canvas id="imageCanvas" width="1014" height="760">
+			</canvas>
+	
+		<!--	<div id="latestImage"><a href="" id="imageClick"><img src="" id="imageElement"></a></div> -->
+	
 		</p>
 		<p>
 			<table border="1">
